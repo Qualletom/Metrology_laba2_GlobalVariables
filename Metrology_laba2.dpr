@@ -5,8 +5,12 @@ program Metrology_laba2;
 uses
   SysUtils,Windows,RegExpr;
 
+const
+  RIGHT_ARRAY_BORDER = 8;
+  ArrayTypesIdentifiers:array [1..RIGHT_ARRAY_BORDER] of string = ('(\bchar\b)','(\bbool\b)','(\bshort\b)','(\bint\b)','(\blong\b)','(\bfloat\b)',
+                                                    '(\bdouble\b)','(\bvoid\b)');
+
 var
-  RegEx:TRegExpr;
   InputString:string;
   ActualAddressCount,AvaliableAddressCount:integer;
   ArrayStringOfFunctions,ArrayOfGlobalVariables:array of string;
@@ -36,17 +40,21 @@ var
     end;
 
 procedure DeleteCommentsFromCode ();
-  begin
-    RegEx.ModifierS:=false;
-    RegEx.Expression:='(\".*\")|(\''.*\'')';
-    InputString := RegEx.Replace(InputString,'');
-    RegEx.ModifierS:=true;
-    RegEx.InputString := InputString;
-    RegEx.Expression := '(\/\*).*?(\*\/)';
-    InputString := RegEx.Replace(InputString,'');
-    RegEx.Expression := '(\/\/).*?\n';
-    InputString := RegEx.Replace(InputString,'');
-  end;
+var
+  RegEx:TRegExpr;
+begin
+  RegEx := TRegExpr.Create;
+  RegEx.ModifierS:=false;
+  RegEx.Expression:='(\".*\")|(\''.*\'')';
+  InputString := RegEx.Replace(InputString,'');
+  RegEx.ModifierS:=true;
+  RegEx.InputString := InputString;
+  RegEx.Expression := '(\/\*).*?(\*\/)';
+  InputString := RegEx.Replace(InputString,'');
+  RegEx.Expression := '(\/\/).*?\n';
+  InputString := RegEx.Replace(InputString,'');
+  RegEX.Free;
+end;
 
 function FillVariableBySpaces (var SpaceCount:integer):string;
 const
@@ -56,7 +64,7 @@ var
 begin
   Result:='';
   for IndexSpace:=1 to SpaceCount do
-    result:=result + Space;
+    Result:=Result + Space;
 end;
 
 procedure ReplaceString (var WorkString:string; StringPosition,StringLength:integer);
@@ -76,12 +84,11 @@ begin
 end;
 
 procedure FindAndMoveFunctions ();
-const
-  ArrayTypesIdentifiers:array [1..8] of string = ('(\bchar\b)','(\bbool\b)','(\bshort\b)','(\bint\b)','(\blong\b)','(\bfloat\b)',
-                                                    '(\bdouble\b)','(\bvoid\b)');
 var
+  RegEx:TRegExpr;
   ArrayElementNumber,BraceCount,FunctionPosition:integer;
 begin
+  RegEx := TRegExpr.Create;
   RegEx.ModifierS:=true;
   RegEx.ModifierI:=true;
   for ArrayElementNumber:=1 to length(ArrayTypesIdentifiers) do
@@ -104,18 +111,20 @@ begin
            RegEx.Expression := ArrayTypesIdentifiers[ArrayElementNumber] + '[ ,a-z,0-9,_,\n]*\([^}]*?\{';
          until not (regex.ExecPos(RegEx.MatchPos[0]));
     end;
+  RegEx.Free;
 end;
 
 procedure GlobalVariablesCount ();
-const
-  ArrayTypesIdentifiers:array [1..8] of string = ('(\bchar\b)','(\bbool\b)','(\bshort\b)','(\bint\b)','(\blong\b)','(\bfloat\b)',
-                                                    '(\bdouble\b)','(\bvoid\b)');
 var
+  RegEx:TRegExpr;
   ArrayElementNumber,NextPositionSearch:integer;
 begin
+  RegEx := TRegExpr.Create;
+  RegEx.ModifierS:=true;
+  RegEx.ModifierI:=true;
   for ArrayElementNumber:=1 to length(ArrayTypesIdentifiers) do
     begin
-      RegEx.Expression := ArrayTypesIdentifiers[ArrayElementNumber] + '([ ,]*?)([a-z0-9_]+)([ \[\]]*?(\,|\;|\=))';
+      RegEx.Expression := ArrayTypesIdentifiers[ArrayElementNumber] + '([ ,\n\r\t]*?)([a-z0-9_]+)([ \[\]]*?(\,|\;|\=))';
       if RegEx.Exec(InputString) then
         repeat
           SetLength(ArrayOfGlobalVariables,length(ArrayOfGlobalVariables)+1);
@@ -125,26 +134,27 @@ begin
           RegEx.InputString:=InputString;
         until not RegEx.ExecPos(NextPositionSearch);
     end;
+  RegEx.Free;
 end;
 
 procedure FindAndDeleteLocalVariables ();
-const
-  ArrayTypesIdentifiers:array [1..8] of string = ('(\bchar\b)','(\bbool\b)','(\bshort\b)','(\bint\b)','(\blong\b)','(\bfloat\b)',
-                                                    '(\bdouble\b)','(\bvoid\b)');
 var
+  RegEx:TRegExpr;
   ArrayElementNumber,ArrayElementCount,NextPositionSearch:integer;
   VariableName:string;
 begin
+  RegEx := TRegExpr.Create;
+  RegEx.ModifierS:=true;
+  RegEx.ModifierI:=true;
   for ArrayElementNumber:=0 to length(ArrayStringOfFunctions)-1 do
     begin
       for ArrayElementCount:=1 to length(ArrayTypesIdentifiers) do
         begin
-          RegEx.Expression := ArrayTypesIdentifiers[ArrayElementCount] + '([ ,]*?)([a-z0-9_]+)( *?([,;=\[]))';
+          RegEx.Expression := ArrayTypesIdentifiers[ArrayElementCount] + '([ ,\n\r\t]*?)([a-z0-9_]+)( *?([,;=\[]))';
           if RegEx.Exec(ArrayStringOfFunctions[ArrayElementNumber]) then
             repeat
-              //ReplaceString(ArrayStringOfFunctions[ArrayElementNumber],RegEx.MatchPos[0],RegEx.MatchLen[0]);
               ReplaceString(ArrayStringOfFunctions[ArrayElementNumber],RegEx.MatchPos[0]+RegEx.MatchLen[1],RegEx.MatchLen[0]-RegEx.MatchLen[1]-1);
-              NextPositionSearch:=RegEx.MatchPos[0]; {+ RegEx.MatchLen[0]};
+              NextPositionSearch:=RegEx.MatchPos[0];
               VariableName:=RegEx.Match[3];
               RegEx.Expression := '\b' + VariableName + '\b';
               if RegEx.ExecPos(RegEx.MatchPos[0] + RegEx.MatchLen[0]) then
@@ -152,32 +162,39 @@ begin
                   ReplaceString(ArrayStringOfFunctions[ArrayElementNumber],RegEx.MatchPos[0],RegEx.MatchLen[0]);
                 until not (RegEx.ExecNext);
 
-              RegEx.Expression := ArrayTypesIdentifiers[ArrayElementCount] + '([ ,]*?)([a-z0-9_]+)( *?([,;=\[]))';
+              RegEx.Expression := ArrayTypesIdentifiers[ArrayElementCount] + '([ ,\n\r\t]*?)([a-z0-9_]+)( *?([,;=\[]))';
               RegEx.InputString:=ArrayStringOfFunctions[ArrayElementNumber];
             until not (RegEx.ExecPos(NextPositionSearch));
         end;
     end;
+  RegEx.Free;
 end;
 
-procedure ActualAddressVariablesCount ();
+procedure ActualAddressVariablesCount();
 var
+  RegEx:TRegExpr;
   ArrayElementNumber,ArrayElementCount:integer;
 begin
+  RegEx := TRegExpr.Create;
+  RegEx.ModifierS:=true;
+  RegEx.ModifierI:=true;
   for ArrayElementNumber := 0 to length(ArrayOfGlobalVariables)-1 do
     begin
       RegEx.Expression:='\b' + ArrayOfGlobalVariables[ArrayElementNumber] + '\b';
       for ArrayElementCount:=0 to length(ArrayStringOfFunctions)-1 do
         begin
           if RegEx.Exec(ArrayStringOfFunctions[ArrayElementCount]) then
-            inc(ActualAddressCount);
+            repeat
+              inc(ActualAddressCount);
+            until not (RegEX.ExecNext);
         end;
     end;
+  RegEx.Free;
 end;
 
 begin
   SetConsoleCp(1251);
   SetConsoleOutputCP(1251);
-  RegEx := TRegExpr.Create;
   ReadCodeFromFile();
   If IsCorrectFileName = true then
     begin
@@ -187,10 +204,10 @@ begin
       FindAndDeleteLocalVariables();
       ActualAddressVariablesCount();
       Writeln('Количество глобальных переменных: ', length(ArrayOfGlobalVariables));
-      Writeln('Количество фактических обращений к глобальным переменным: ',ActualAddressCount);
+      Writeln('Количество фактических обращений к глобальным переменным (AUP): ',ActualAddressCount);
       AvaliableAddressCount:=length(ArrayOfGlobalVariables)*length(ArrayStringOfFunctions);
-      Writeln('Количество возможных обращений к глобальным переменным: ', AvaliableAddressCount);
-      Writeln('отношение фактических обращений к возмодным: ', (ActualAddressCount/AvaliableAddressCount):0:3);
+      Writeln('Количество возможных обращений к глобальным переменным (PUP): ', AvaliableAddressCount);
+      Writeln('отношение фактических обращений к возможным (AUP/PUP): ', (ActualAddressCount/AvaliableAddressCount):0:3);
       Readln;
     end
   else
